@@ -3,8 +3,9 @@
 The optional Python `choose_decision.py` interface lets an application choose
 between TypeSafe Jev and a local Cua-S1-4B model without giving either model
 control of Cua Driver. It is an example-local integration, not a new Driver,
-MCP, or cross-language contract. The existing Python and TypeScript `jev-use`
-runners remain unchanged.
+MCP, or cross-language contract. The Python native runner also supports the
+remote providers described below. The TypeScript and browser runners retain
+their upstream provider support.
 
 ## Boundary
 
@@ -187,3 +188,103 @@ The typed caller policy refuses the same mismatch in deterministic tests.
 Keep an independent fixture oracle and a caller-owned score and margin policy
 for future desktop comparisons; a threshold alone cannot establish that an
 action condition is true.
+
+## Remote decision providers
+
+The Python chooser and native runner accept `openai-decisions` and
+`microsoft-decision1`. Each adapter reuses a pooled HTTP client, makes one
+attempt per decision, and refuses redirects. Invalid responses and provider
+refusals dispatch no input. Optional `inference` metadata records model identity,
+timing, available token counts, and safe error codes. Missing usage stays unknown.
+
+OpenAI uses `OPENAI_API_KEY`, the fixed `/v1/decisions` endpoint, and
+`gpt-6-luna`. Microsoft uses `AZURE_ENDPOINT`, an HTTPS Foundry resource root,
+and `AZURE_DEPLOYMENT_NAME`, which defaults to `decision-1`. Set either
+`AZURE_API_KEY` or `AZURE_ENTRA_TOKEN`. Its endpoint path is
+`/providers/microsoft/v1/systemone`. Microsoft accepts text rather than
+screenshots. Both adapters receive the same textual observation.
+
+From the repository root, install the locked dependencies and run a bounded
+request. This makes a paid API call but performs no desktop action. Keep the
+OpenAI key in the ignored root `.env.local` file with owner-only permissions.
+
+```sh
+uv sync --frozen --project libs/cua-driver/examples/jev-use
+uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
+	python libs/cua-driver/examples/jev-use/python/choose_decision.py \
+	--model openai-decisions \
+	< libs/cua-driver/examples/jev-use/fixtures/jev-choice-request-v1.json
+```
+
+Run the credential-free tests from this example directory with
+`uv run --frozen python -m unittest discover -s python/tests`.
+
+## Compare native decision providers with ordinary tool calls
+
+`benchmark_native.py` compares both decision APIs with `standard-llm`, which
+generates tool names and arguments through ordinary OpenAI Responses function
+calls. The executor requires an exact match to an authorized action from the
+original observation. The baseline has no fabricated probabilities. Its
+default model is `gpt-6-luna`, with reasoning disabled.
+
+Build from the repository root:
+
+```sh
+cargo +1.95.0 build --release --locked --manifest-path libs/cua-driver/rust/Cargo.toml -p cua-driver -p cua-driver-sdk
+bash libs/cua-driver/tests/fixtures/build/macos.sh --only appkit
+```
+
+In one terminal, start an owned daemon with private state and an explicit
+socket. Embedded mode uses the launching host's macOS permissions.
+`--no-permissions-gate` suppresses startup prompts and does not grant permission.
+
+```sh
+mkdir -p artifacts/decision-daemon
+CUA_DRIVER_RS_HOME="$PWD/artifacts/decision-daemon/home" \
+CUA_HOME="$PWD/artifacts/decision-daemon/cua" CUA_DRIVER_RS_TELEMETRY_ENABLED=0 \
+	libs/cua-driver/rust/target/release/cua-driver serve --embedded \
+	--socket "$PWD/artifacts/decision-daemon/driver.sock" \
+	--pid-file "$PWD/artifacts/decision-daemon/driver.pid" \
+	--no-overlay --no-permissions-gate
+```
+
+In another terminal at the repository root, configure authentication and run
+the comparison. Replace the resource placeholder. The Azure CLI command
+obtains an Entra token without printing it.
+
+```sh
+export CUA_DRIVER_BIN="$PWD/libs/cua-driver/rust/target/release/cua-driver"
+export AZURE_ENDPOINT="https://<resource>.services.ai.azure.com"
+export AZURE_DEPLOYMENT_NAME="decision-1"
+export AZURE_ENTRA_TOKEN="$(az account get-access-token --resource https://cognitiveservices.azure.com --query accessToken --output tsv)"
+uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
+	python libs/cua-driver/examples/jev-use/benchmark_native.py \
+	--driver-socket "$PWD/artifacts/decision-daemon/driver.sock" \
+	--repetitions 5 --output-dir artifacts/decision-comparison
+```
+
+This command makes paid API calls and injects input into fresh AppKit fixture
+processes. Run it only with explicit authorization and host permissions. Stop
+the daemon in the first terminal when finished. Output directories must be new.
+
+The default schedule rotates three providers across three tasks, five times
+each. An independent state file checks the goal and rejects distractor actions.
+Failures and timeouts remain in the denominator. Successful latency summaries
+are separate from all-trial wall times. Interrupted delivery remains unknown
+until evidence resolves it.
+
+All variants receive the same actual AX text, goal, and performed-action
+history. Benchmark mode removes declared-step progress and next-action hints,
+and uses task-independent candidate retention. The note is deliberately public
+synthetic text. Outside benchmark mode, secret parameters retain their redaction.
+
+This measures bounded native tasks rather than general GUI planning or
+unrestricted text generation. Microsoft and OpenAI use different models.
+Confidence thresholds do not grant permission. A valid token or capture ID does
+not prove that the UI stayed unchanged during inference. Resolve uncertain
+effects from an independent postcondition before continuing.
+
+The integration uses request and validation patterns from
+[geekjapan/jev-ultrafast](https://github.com/geekjapan/jev-ultrafast/blob/f4d66bde5a3301bee8bb19b0e4a4be318fb05074/jev_ultrafast/model.py)
+as a reference. Its OpenAI implementation is on a branch separate from its
+Azure-only main revision. No sibling package is imported at runtime.
