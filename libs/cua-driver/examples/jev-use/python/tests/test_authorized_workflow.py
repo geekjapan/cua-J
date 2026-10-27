@@ -10,7 +10,7 @@ class AuthorizedWorkflowTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         root = Path(__file__).resolve().parents[6]
         cls.workflow = (
-            root / ".github/workflows/authorized-live-jev-use.yml"
+            root / ".github/workflows/ci.yml"
         ).read_text(encoding="utf-8")
 
     def test_actions_are_pinned_to_commits(self) -> None:
@@ -24,20 +24,11 @@ class AuthorizedWorkflowTest(unittest.TestCase):
         self.assertNotIn("run_live", self.workflow)
         self.assertNotIn("--live", self.workflow)
 
-    def test_mock_steps_use_preinstalled_python_and_audit_mock_rows(self) -> None:
-        self.assertIn(
-            'python_bin="$GITHUB_WORKSPACE/libs/cua-driver/examples/jev-use/.venv/bin/python"',
-            self.workflow,
-        )
-        self.assertIn("verify_setup.py --typescript --max-steps 2", self.workflow)
-        self.assertIn(".venv/bin/python verify_choice_cli.py", self.workflow)
-        self.assertIn('assert summary["live_requested"] is False', self.workflow)
-        self.assertIn('assert summary["typescript_requested"] is True', self.workflow)
-        mock_checks = re.search(
-            r"name: Run bounded mock checks\n(?:[^\n]*\n)*?.*?verify_setup\.py --typescript",
-            self.workflow,
-        )
-        self.assertIsNotNone(mock_checks)
+    def test_python_decisions_use_locked_dependencies_and_credential_free_suite(self) -> None:
+        self.assertIn("python-decisions:", self.workflow)
+        self.assertIn("uv sync --frozen", self.workflow)
+        self.assertIn("uv run --frozen python -m unittest discover -s python/tests", self.workflow)
+        self.assertIn("persist-credentials: false", self.workflow)
 
 
 if __name__ == "__main__":

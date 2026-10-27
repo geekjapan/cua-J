@@ -110,7 +110,7 @@ def choose_request(value: Any, model: Any) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=("mock", "jev", "s1"), default="mock")
+    parser.add_argument("--model", choices=("mock", "jev", "s1", "openai-decisions", "microsoft-decision1"), default="mock")
     parser.add_argument(
         "--s1-modality",
         choices=S1_MODALITIES,
@@ -125,6 +125,7 @@ def main() -> None:
         "--screenshot-capture-id",
         help="multimodal S1 only: capture ID of --screenshot; must equal the request capture_id",
     )
+    parser.add_argument("--openai-model", default="gpt-6-luna")
     args = parser.parse_args()
     if args.model != "s1" and (
         args.s1_modality or args.screenshot is not None or args.screenshot_capture_id is not None
@@ -138,6 +139,18 @@ def main() -> None:
         validate_request(request)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError, KeyError, TypeError) as error:
         raise SystemExit(f"invalid request: {error}") from None
+    if args.model in {"openai-decisions", "microsoft-decision1"}:
+        import httpx
+        from decision_providers import OpenAIDecisionModel, MicrosoftDecisionModel, provider_transport
+        try:
+            with httpx.Client(timeout=60, follow_redirects=False, transport=httpx.HTTPTransport(retries=0)) as client:
+                transport = provider_transport(args.model, client, args.openai_model)
+                provider = OpenAIDecisionModel(transport) if args.model == "openai-decisions" else MicrosoftDecisionModel(transport)
+                result = choose_request(request, provider)
+        except ValueError:
+            raise SystemExit("provider setup failed") from None
+        sys.stdout.write(json.dumps(result, separators=(",", ":")) + "\n")
+        raise SystemExit(1 if result["kind"] == "error" else 0)
     if args.model == "mock":
         model = MockDecisionModel()
     elif args.model == "s1":

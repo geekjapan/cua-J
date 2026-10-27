@@ -592,6 +592,21 @@ class NativeTask:
     def read_oracle(self) -> Mapping[str, Any]:
         return self.oracle.read()
 
+    def action_progress(self, before: Mapping[str, Any], after: Mapping[str, Any], candidate_id: str) -> bool:
+        candidate_id = candidate_id.removesuffix(":foreground")
+        if (type(before.get("distractor_actions")) is not int
+                or after.get("distractor_actions") != before["distractor_actions"]):
+            return False
+        if self.id.endswith("-counter") and candidate_id == "ax:button:increment":
+            return (type(before.get("counter")) is int and type(after.get("counter")) is int
+                    and after["counter"] == before["counter"] + 1)
+        if self.id.endswith("-choose-size"):
+            if candidate_id == "ax:radio:large":
+                return before.get("size") != "large" and after.get("size") == "large"
+            if candidate_id == "ax:checkbox:i-agree":
+                return before.get("agreed") is False and after.get("agreed") is True
+        return False
+
     def classify(self, oracle: Mapping[str, Any], *, steps: int) -> Outcome:
         result = self.check(oracle)
         if result in {"verified", "refuted"}:
@@ -665,6 +680,7 @@ def native_choice_request(
     sources: TaskSources,
     step: NativeStep,
     history: list[Mapping[str, Any]],
+    *, benchmark_input: bool = False,
 ) -> dict[str, Any]:
     """Build the ``cua.jev_choice_request_v2`` the provider receives.
 
@@ -678,7 +694,7 @@ def native_choice_request(
     observation = sources.ax.observation
     candidates = []
     for candidate in step.candidates:
-        description = candidate.description + task.step_note(candidate.id, history)
+        description = candidate.description + ("" if benchmark_input else task.step_note(candidate.id, history))
         item: dict[str, Any] = {"id": candidate.id, "description": task.redact(description)}
         if candidate.source is not None:
             item["source"] = candidate.source
@@ -691,12 +707,12 @@ def native_choice_request(
         "regions": visual_regions_wire(sources, task),
         "elements": [task.redact(item) for item in step.elements],
         "history": [
-            {"selected_id": item["selected_id"], "outcome": item["outcome"]}
+            {"selected_id": item["selected_id"], "outcome": ("action delivered" if benchmark_input and item.get("performed") else item["outcome"])}
             for item in history[-MAX_HISTORY:]
         ],
         "candidates": candidates,
     }
-    if task.steps:
+    if task.steps and not benchmark_input:
         request["progress"] = task.progress(history)
     return request
 
