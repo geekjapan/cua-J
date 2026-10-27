@@ -1,0 +1,13 @@
+ts	phase	decision	why	evidence	result
+2026-10-27T13:12:18.379469+00:00	scope	Keep Cua Driver and its sole local crate dependency	User selected Driver; preserve dependency closure	UPSTREAM.json	imported
+2026-10-27T13:12:18.380010+00:00	licensing	Vendor both telemetry build catalogs and retain teleport license	Build script requires catalogs even without HTTP telemetry	libs/cua/crates/cua-telemetry/build.rs	FSL asset disclosed
+2026-10-27T13:12:18.380022+00:00	toolchain	Pin Rust 1.95.0 instead of upstream 1.97.1	Installed compiler successfully builds CLI and SDK	README.md	build passed
+2026-10-27T13:12:18.380028+00:00	formal	Use Z3 bounded model and actual CaptureService admission traces	Connect symbolic state to production removal, rather than legacy consume API	scripts/verify-formal.py	10000 traces and mutation passed
+2026-10-27T13:12:18.380036+00:00	runtime	Parse describe input_schema section instead of whole stdout	CLI describe output contains human-readable headings	scripts/verify-runtime.py	corrected observed failure
+2026-10-27T13:12:18.380041+00:00	runtime	Use supported no-permissions-gate for read-only dimensions	Startup TCC guide blocks calls even though this read requires no grant	artifacts/runtime/result.json	native read passed
+2026-10-27T13:12:18.380044+00:00	review	Use native independent review	Cross-family routes and deslop plugin are unavailable	AGENTS.md	no diverse-model or deslop execution claimed
+2026-10-27T13:18:47.561153+00:00	review	Keep SIGTERM and SIGINT blocked while restoring mutated source	Independent review found a handler reset before restoration	scripts/verify-formal.py	fixed; final mutation rerun pending
+2026-10-27T13:18:47.561845+00:00	runtime	Check the entire owned process group after wrapper exit	Wrapper PID differs from actual daemon PID	artifacts/runtime/cleanup.json	group absent
+2026-10-27T13:18:47.561855+00:00	tests	Recheck CLI tests serially after one parallel failure	Pacman ownership test failed in parallel and passed alone; cause unconfirmed	artifacts/cli-failure-recheck.log	serial suite running
+2026-10-27T13:20:02.835167+00:00	verify	Accept serial CLI suite and retain parallel failure evidence	Full serial suite exits 0; one parallel failure remains unexplained	artifacts/cli-tests-serial.log	verified with nondeterminism caveat
+2026-10-27T13:20:02.835419+00:00	verify	Accept final native and formal helper reruns	Native group cleanup and final restored-source tests passed	.audit/verification.md	verified
