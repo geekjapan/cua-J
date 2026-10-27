@@ -328,6 +328,7 @@ from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, {str(Path(benchmark.__file__).parent)!r})
 import benchmark_native as b
+b.sys = SimpleNamespace(platform='darwin', executable=sys.executable)
 b.HARNESSES['appkit'] = SimpleNamespace(app=Path({str(work)!r}), executable='fixture', state_env='TEST_STATE', density_env='TEST_DENSITY', state_schema='test')
 b.read_state = lambda harness, path, pid: json.loads(path.read_text())
 b.metadata = lambda args: {{}}
