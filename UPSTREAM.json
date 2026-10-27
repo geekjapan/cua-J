@@ -5647,6 +5647,10 @@
     {
       "path": "libs/cua-driver/examples/jev-use/uv.lock",
       "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/run.py",
+      "reason": "Preserve structured refusal identity in DriverToolError for website action evidence; existing callers remain compatible."
     }
   ]
 }
