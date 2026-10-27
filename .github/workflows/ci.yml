@@ -50,8 +50,8 @@ jobs:
 
       - name: Test CLI serially
         run: |
-          set -o pipefail
-          cargo +1.95.0 test --locked --manifest-path libs/cua-driver/rust/Cargo.toml -p cua-driver -- --test-threads=1 2>&1 | tee artifacts/ci/cli-tests.log
+          trap 'tail -n 100 artifacts/ci/cli-tests.log' EXIT
+          cargo +1.95.0 test --locked --manifest-path libs/cua-driver/rust/Cargo.toml -p cua-driver -- --test-threads=1 > artifacts/ci/cli-tests.log 2>&1
 
       - name: Verify bounded capture consumption and mutation detection
         run: |
