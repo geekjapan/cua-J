@@ -32,6 +32,8 @@ The Python native runner supports OpenAI Decisions, Microsoft Decision-1 and ord
 
 See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and browser runners retain their upstream provider support.
 
+The [45-trial native comparison](libs/cua-driver/examples/jev-use/benchmarks/2026-10-28-native.md) records measured completion rates, inference and task times, failures and limits. Sanitized trial data and source hashes accompany the report.
+
 ## Import and licenses
 
 [UPSTREAM.json](UPSTREAM.json) records each imported path and SHA-256. The upstream Git history is not imported. The pre-existing local initialization commit is preserved. Upstream contributor copyright notices are retained.

@@ -227,6 +227,9 @@ calls. The executor requires an exact match to an authorized action from the
 original observation. The baseline has no fabricated probabilities. Its
 default model is `gpt-6-luna`, with reasoning disabled.
 
+See the [45-trial comparison results](benchmarks/2026-10-28-native.md) for measured
+completion rates, timing ranges and limits.
+
 Build from the repository root:
 
 ```sh
