@@ -291,3 +291,45 @@ The integration uses request and validation patterns from
 [geekjapan/jev-ultrafast](https://github.com/geekjapan/jev-ultrafast/blob/f4d66bde5a3301bee8bb19b0e4a4be318fb05074/jev_ultrafast/model.py)
 as a reference. Its OpenAI implementation is on a branch separate from its
 Azure-only main revision. No sibling package is imported at runtime.
+
+## Compare actual public websites
+
+`benchmark_web.py` uses the same providers through Cua Driver's typed browser
+tools. It starts a fresh Driver-owned Chrome profile per trial. It searches
+Wikipedia for Solar eclipse, opens Python's `pathlib.Path.read_text`
+documentation, and opens the first new Hacker News story's discussion.
+
+Use the release Driver daemon and authentication environment above. From the
+repository root, run this command only with authorization for paid API calls
+and interaction with these public sites.
+
+```sh
+uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
+	python libs/cua-driver/examples/jev-use/benchmark_web.py \
+	--allow-live-sites --driver-socket "$PWD/artifacts/decision-daemon/driver.sock" \
+	--repetitions 5 --timeout 180 --max-decisions 8 \
+	--output-dir artifacts/website-comparison
+```
+
+The default schedule has 45 trials with rotating provider order. Each trial uses
+snapshot-bound browser refs, trusted background clicks and the same task query.
+The Responses baseline generates full tool arguments. Decisions selects an
+enumerated candidate and must pass the unchanged 0.6 probability and 0.1 margin
+gates. Neither receives correctness labels or oracle results.
+
+Completion checks the target URL path or anchor and page title. Hacker News also requires
+the first observed story's independently resolved submission ID. Task time
+includes observation, inference, dispatch and verification after start-page
+setup. Successful times are separate from all-trial wall times. Action outcomes
+retain verified progress, preparation, wrong destination, no change, refusal,
+error and unknown. These measure the fixed controller policy, not intrinsic
+model accuracy. Changing live content and host load limit comparisons.
+
+Verified action-cycle time starts before candidate construction and inference
+and ends after the action's observed postcondition. Per-observation waiting is
+capped at 60 seconds within the common 180-second task budget.
+
+Raw snapshots, event logs, usage and source hashes remain in the new output
+directory. The runner closes its owned browser and stops the schedule after
+interruption, incomplete inference evidence or unsuccessful cleanup. It does
+not modify a personal browser profile. Stop the owned daemon when finished.

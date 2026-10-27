@@ -30,15 +30,17 @@ The hosted job does not run `scripts/verify-runtime.py`. Native display verifica
 
 The Python native runner supports OpenAI Decisions, Microsoft Decision-1 and ordinary OpenAI Responses function calls. It binds each selection to the original observation and authorized action arguments. Model confidence does not grant permission. Driver tokens and capture IDs do not prove that an external UI stayed unchanged during inference.
 
-See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and browser runners retain their upstream provider support.
+See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and existing browser runners retain their upstream provider support.
 
 The [45-trial native comparison](libs/cua-driver/examples/jev-use/benchmarks/2026-10-28-native.md) records measured completion rates, inference and task times, failures and limits. Sanitized trial data and source hashes accompany the report.
+
+A separate [public website comparison](libs/cua-driver/examples/jev-use/decision-models.md#compare-actual-public-websites) runs the three providers through Cua Driver's browser tools on Wikipedia, Python documentation and Hacker News. It uses isolated Chrome profiles, independent completion checks and explicit action outcomes.
 
 ## Import and licenses
 
 [UPSTREAM.json](UPSTREAM.json) records each imported path and SHA-256. The upstream Git history is not imported. The pre-existing local initialization commit is preserved. Upstream contributor copyright notices are retained.
 
-Local changes include the consolidated root license and its packaging input paths, the reduced `libs/cua/Cargo.toml`, the Rust toolchain pin changed from 1.97.1 to the tested 1.95.0, root documentation and ignores, verification helpers and skills, and the bounded test. The Python native example adds remote decision providers, guarded execution, a Responses baseline and a repeatable comparison. The Rust Driver implementation remains unchanged. `.DS_Store` and upstream `CLAUDE.md` instructions are excluded. `UPSTREAM.json` lists deliberate modifications to imported files.
+Local changes include the consolidated root license and its packaging input paths, the reduced `libs/cua/Cargo.toml`, the Rust toolchain pin changed from 1.97.1 to the tested 1.95.0, root documentation and ignores, verification helpers and skills, and the bounded test. The Python example adds remote decision providers, guarded native execution, a Responses baseline and repeatable native and website comparisons. The Rust Driver implementation remains unchanged. `.DS_Store` and upstream `CLAUDE.md` instructions are excluded. `UPSTREAM.json` lists deliberate modifications to imported files.
 
 [LICENSE](LICENSE) contains the upstream MIT notice and parallel copyright notices for Cua AI, Inc. and geekjapan modifications. Third-party notices and licenses remain beside their assets. The vendored `teleport-targets.json` comes from an FSL-1.1-MIT directory and retains its [source license](libs/cua/crates/cua-telemetry/vendor/LICENSE-teleport). This import as a whole must not be described as MIT-only. Optional perception models are not downloaded by this build.
 
