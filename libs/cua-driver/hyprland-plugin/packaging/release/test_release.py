@@ -43,7 +43,7 @@ class ReleaseTest(unittest.TestCase):
             self.write(bundle.PLUGIN + name, "// synthetic public source\n")
         self.write(bundle.PLUGIN + "CMakeLists.txt", "project(cua_hyprland_plugin VERSION 0.1.0 LANGUAGES CXX)\n")
         self.write("libs/cua-driver/rust/Cargo.toml", '[workspace.package]\nversion = "1.2.3"\n')
-        self.write("LICENSE.md", "Synthetic fixture license\n")
+        self.write("LICENSE", "Synthetic fixture license\n")
         for name in ("verify.py", "PKGBUILD.in", "USAGE.md", "lifecycle.py"):
             self.write(bundle.RELEASE + name, (HERE / name).read_text())
         self.write("private/secret.txt", "excluded sentinel\n")

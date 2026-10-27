@@ -3,8 +3,9 @@
   "commit": "bb507dd282c53b872edd5cabff81860fcaa746bf",
   "files": [
     {
-      "path": "LICENSE.md",
-      "sha256": "c0779290c1d4783169aa3dbfb55feb505e563ef8a004bbf55298ceffcfbda8d9"
+      "path": "LICENSE",
+      "sha256": "c0779290c1d4783169aa3dbfb55feb505e563ef8a004bbf55298ceffcfbda8d9",
+      "source": "LICENSE.md"
     },
     {
       "path": "libs/cua-driver/README.md",
@@ -5572,6 +5573,48 @@
       "path": "libs/cua/crates/cua-telemetry/vendor/LICENSE-teleport",
       "source": "libs/cua/crates/cua-teleport/LICENSE",
       "sha256": "394023b2176ae770796fee3b43f0eda61c23d0effbe4f6a0cfcae050a72cb70c"
+    }
+  ],
+  "modifications": [
+    {
+      "path": "LICENSE",
+      "reason": "Combine upstream MIT notice with geekjapan modification copyright."
+    },
+    {
+      "path": "libs/cua-driver/rust/rust-toolchain.toml",
+      "reason": "Pin to locally verified Rust 1.95.0."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/packaging/arch/PKGBUILD",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/packaging/release/bundle.py",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/packaging/release/test_release.py",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/rust/crates/cua-perception/scripts/assemble_bundle.py",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/rust/crates/cua-perception/models/source-inventory.template.json",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/src/keymap_equivalence.hpp",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/tests/foreground_modifiers_test.py",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/hyprland-plugin/tests/keyboard_layout_test.cpp",
+      "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
     }
   ]
 }

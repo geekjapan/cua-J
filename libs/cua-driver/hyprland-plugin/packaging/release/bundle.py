@@ -116,7 +116,7 @@ def generate(repo, revision, driver_version, output, *, release_assets=False):
         if git(repo, "rev-parse", "--verify", f"{tag}^{{commit}}").decode().strip() != revision:
             raise ValueError("source revision does not match the exact Driver release tag")
     payload = {name: committed_file(repo, revision, PLUGIN + name) for name in SOURCE_FILES}
-    payload["LICENSE.md"] = committed_file(repo, revision, "LICENSE.md")
+    payload["LICENSE.md"] = committed_file(repo, revision, "LICENSE")
     payload["verify.py"] = committed_file(repo, revision, RELEASE + "verify.py")
     version = re.search(rb"project\(cua_hyprland_plugin VERSION ([0-9.]+) LANGUAGES CXX\)", payload["CMakeLists.txt"])
     if not version:

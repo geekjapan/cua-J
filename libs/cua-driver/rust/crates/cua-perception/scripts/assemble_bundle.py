@@ -32,7 +32,7 @@ from artifact_tooling import (
 from verify_bundle import exercise_bundle
 
 SOURCE_PATHS = (
-    "LICENSE.md",
+    "LICENSE",
     "libs/cua-driver/rust/Cargo.lock",
     "libs/cua-driver/rust/Cargo.toml",
     "libs/cua-driver/rust/crates/cua-perception",

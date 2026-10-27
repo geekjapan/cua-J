@@ -4,7 +4,7 @@
 // foreground_chord_failure) is adapted from omacom/omarchy-pkgs#473,
 // pkgbuilds/cua-hyprland-plugin/independent-keymaps.patch, by Spencer Bull.
 // Copyright (c) David Heinemeier Hansson. Used under the MIT License, whose
-// permission notice is the same as this repository's LICENSE.md.
+// permission notice is the same as this repository's LICENSE.
 
 #include "foreground_route.hpp"
 
