@@ -20,6 +20,12 @@ The formal check covers one capture and every sequence of four operations drawn 
 
 Project-local instructions and feature maps are in [.cursor/skills/verify-cua-driver](.cursor/skills/verify-cua-driver/SKILL.md) and [.cursor/skills/verify-capture-consumption](.cursor/skills/verify-capture-consumption/SKILL.md). Use `/maintain-verification-skill` and `/maintain-formal-verification-skill` to update them after changes.
 
+## CI
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes to `main`, pull requests and manual dispatch. One macOS 26 job builds the CLI and Rust SDK, runs core, contract and SDK tests, runs CLI tests serially, then runs the bounded formal check with mutation detection. CI logs are retained for seven days.
+
+The hosted job does not run `scripts/verify-runtime.py`. Native display verification remains a separate local check using the commands above. CI does not certify desktop interaction or other platforms.
+
 ## Import and licenses
 
 [UPSTREAM.json](UPSTREAM.json) records each imported path and SHA-256. The upstream Git history is not imported. The pre-existing local initialization commit is preserved. Upstream contributor copyright notices are retained.
