@@ -34,7 +34,7 @@ See [the decision providers and native comparison](libs/cua-driver/examples/jev-
 
 The [45-trial native comparison](libs/cua-driver/examples/jev-use/benchmarks/2026-10-28-native.md) records measured completion rates, inference and task times, failures and limits. Sanitized trial data and source hashes accompany the report.
 
-A separate [public website comparison](libs/cua-driver/examples/jev-use/decision-models.md#compare-actual-public-websites) runs the three providers through Cua Driver's browser tools on Wikipedia, Python documentation and Hacker News. It uses isolated Chrome profiles, independent completion checks and explicit action outcomes.
+The [45-trial public website comparison](docs/benchmarks/2026-10-28-websites.md) records completion, action outcomes and timing on Wikipedia, Python documentation and Hacker News. See [the website setup](libs/cua-driver/examples/jev-use/decision-models.md#compare-actual-public-websites) to repeat it with isolated Chrome profiles and independent completion checks.
 
 ## Import and licenses
 

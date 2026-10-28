@@ -294,6 +294,9 @@ Azure-only main revision. No sibling package is imported at runtime.
 
 ## Compare actual public websites
 
+See the [measured website results](../../../../docs/benchmarks/2026-10-28-websites.md)
+for completion counts, action outcomes, timing ranges and limitations.
+
 `benchmark_web.py` uses the same providers through Cua Driver's typed browser
 tools. It starts a fresh Driver-owned Chrome profile per trial. It searches
 Wikipedia for Solar eclipse, opens Python's `pathlib.Path.read_text`
