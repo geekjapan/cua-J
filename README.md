@@ -4,6 +4,24 @@ A history-independent import of the Cua Driver CLI and libraries from [trycua/cu
 
 Driver sources, Rust SDK, Python and TypeScript bindings, contract definitions, platform adapters, fixtures and embedded assets are retained. Spaces, VM management, model training and benchmark products are excluded. The only local crate dependency outside Driver is `cua-telemetry`; its two build-time catalogs are vendored using its upstream fallback mechanism.
 
+## Install the agent skill
+
+With Node.js 22.20 or later, run this command from the project where you want to use Cua Driver:
+
+```sh
+npx skills add geekjapan/cua-J --skill cua-j
+```
+
+Choose your coding agent when prompted. For a non-interactive Codex installation:
+
+```sh
+npx skills add geekjapan/cua-J --skill cua-j --agent codex --yes
+```
+
+The command installs the [cua-j agent skill](skills/cua-j/SKILL.md) into the current project. Add `--global` for a user-wide installation. See the [skills CLI reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md) for supported agents and options.
+
+The skill guides setup and operation through Driver's bundled guides. Install the Driver executable with the source-build steps below and connect it to your agent through MCP.
+
 ## Install on macOS
 
 Install Git, Xcode command line tools and `rustup` first. These commands build this fork from source. Run the remaining commands from the repository root.
