@@ -5615,6 +5615,42 @@
     {
       "path": "libs/cua-driver/hyprland-plugin/tests/keyboard_layout_test.cpp",
       "reason": "Use consolidated root LICENSE; retain existing release archive format where applicable."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/decision-models.md",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/pyproject.toml",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/choose_decision.py",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/decision_models.py",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/native_tasks.py",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/run_native.py",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/tests/test_authorized_workflow.py",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/uv.lock",
+      "reason": "Add remote decision providers and guarded Python native execution, or document and verify the local decision integration."
+    },
+    {
+      "path": "libs/cua-driver/examples/jev-use/python/run.py",
+      "reason": "Preserve structured refusal identity in DriverToolError for website action evidence; existing callers remain compatible."
     }
   ]
 }

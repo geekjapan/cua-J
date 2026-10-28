@@ -14,6 +14,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python-decisions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      UV_NO_PROGRESS: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    defaults:
+      run:
+        shell: bash
+        working-directory: libs/cua-driver/examples/jev-use
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install locked Python dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check uv==0.11.6
+          uv sync --frozen --python 3.13.13
+
+      - name: Test decision adapters and native execution policy without credentials
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/ci"
+          trap 'tail -n 100 "$GITHUB_WORKSPACE/artifacts/ci/python-decisions.log"' EXIT
+          uv run --frozen python -m unittest discover -s python/tests > "$GITHUB_WORKSPACE/artifacts/ci/python-decisions.log" 2>&1
+
+      - name: Verify tracked sources are unchanged
+        if: always()
+        run: git diff --exit-code
+
+      - name: Upload Python test log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: python-decision-logs
+          path: artifacts/ci/python-decisions.log
+          retention-days: 7
+          if-no-files-found: warn
+
   verify:
     runs-on: macos-26
     timeout-minutes: 45

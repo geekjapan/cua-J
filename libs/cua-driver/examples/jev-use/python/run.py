@@ -68,10 +68,12 @@ class DriverToolError(RuntimeError):
         message: str,
         code: str | None = None,
         recommended_delivery: str | None = None,
+        refused: bool = False,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.recommended_delivery = recommended_delivery
+        self.refused = refused
 
 
 class Driver:
@@ -94,6 +96,7 @@ class Driver:
                 f"{name} failed: {getattr(result, 'content', None)}",
                 code if isinstance(code, str) and code else None,
                 recommended if isinstance(recommended, str) and recommended else None,
+                refused=structured.get("status") == "refused" or bool(refusal),
             )
         data = result.structuredContent
         if not isinstance(data, dict):
@@ -105,6 +108,7 @@ class Driver:
             raise DriverToolError(
                 f"{name} refused: {data.get('refusal', data)}",
                 code if isinstance(code, str) and code else None,
+                refused=True,
             )
         return data
 

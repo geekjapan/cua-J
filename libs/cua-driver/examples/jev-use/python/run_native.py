@@ -16,6 +16,11 @@ checks the state file independently.
 from __future__ import annotations
 
 import argparse
+import math
+from contextlib import ExitStack
+from dataclasses import replace
+
+import httpx
 import asyncio
 import json
 import os
@@ -31,6 +36,9 @@ from mcp.client.stdio import stdio_client
 from choose_action import validate_request
 from core import Candidate, VisualObservationError, parse_visual_regions, validate_choice
 from decision_models import DecisionRequest, TypeSafeDecisionModel, choose
+from decision_providers import OpenAIDecisionModel, MicrosoftDecisionModel, ProviderError, provider_transport
+from native_dispatch import validate_dispatch
+from standard_llm import choose_standard
 from driver_env import driver_environment
 from jev_adapter import choose_mock_for_task
 from native import NativeObservation, NativeObservationError
@@ -142,6 +150,7 @@ async def observe_step(
         )
         return TaskSources(ax=ax, foreground_ids=foreground_ids)
 
+    record["observed_at"] = time.monotonic()
     sources = build(await observe(driver, task, pid, window_id))
     observation = sources.ax.observation  # type: ignore[union-attr]
     native_count = sum(
@@ -149,6 +158,7 @@ async def observe_step(
     )
     if observation.truncated or (observation.partial and native_count == 0):
         record = {"reobserved": True, "reason": "truncated" if observation.truncated else "partial_empty"}
+        record["observed_at"] = time.monotonic()
         sources = build(
             await observe(driver, task, pid, window_id, timeout_ms=REOBSERVE_TIMEOUT_MS)
         )
@@ -249,7 +259,20 @@ async def poll_oracle(task: NativeTask, steps: int) -> str:
     return outcome
 
 
+NEW_PROVIDERS = ("openai-decisions", "microsoft-decision1", "standard-llm")
+
+
 async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
+    with ExitStack() as stack:
+        transport = None
+        if args.provider in NEW_PROVIDERS:
+            client = stack.enter_context(httpx.Client(timeout=60.0, follow_redirects=False,
+                                                       transport=httpx.HTTPTransport(retries=0)))
+            transport = provider_transport(args.provider, client, args.openai_model)
+        return await _run_task(args, task, transport)
+
+
+async def _run_task(args: argparse.Namespace, task: NativeTask, transport: Any = None) -> str:
     platform: Platform = args.platform or host_platform()
     log_path = Path(args.log) if args.log else None
     if log_path:
@@ -258,7 +281,7 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
     foreground_ids: set[str] = set()
     label = f"jev-native-python-{uuid.uuid4().hex[:8]}"
     params = StdioServerParameters(
-        command=os.getenv("CUA_DRIVER_BIN", "cua-driver"), args=["mcp"], env=driver_environment()
+        command=os.getenv("CUA_DRIVER_BIN", "cua-driver"), args=["mcp", *(["--socket", args.driver_socket] if getattr(args, "driver_socket", None) else [])], env=driver_environment()
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -275,7 +298,8 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                  "platform": platform, "pid": args.pid, "window_id": window_id},
             )
             for step in range(1, task.max_steps + 1):
-                current = task.classify(task.read_oracle(), steps=step - 1)
+                before = task.read_oracle()
+                current = task.classify(before, steps=step - 1)
                 if current in {"verified", "refuted"}:
                     write_event(log_path, {"event": "outcome", "outcome": current, "step": step - 1})
                     return current
@@ -287,11 +311,45 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                     driver, task, sources, available_tools, capture_bound_click
                 )
                 plan = task.plan(sources)
-                request = native_choice_request(task, sources, plan, history)
+                request = native_choice_request(task, sources, plan, history, benchmark_input=getattr(args, "benchmark_input", False))
                 validate_request(request)
 
                 decide_started = time.perf_counter()
-                if args.provider == "mock":
+                inference = None
+                decision = None
+                if args.provider in NEW_PROVIDERS:
+                    model_request = replace(DecisionRequest.from_validated(validate_request(request)),
+                        observation_text=task.redact_text(sources.ax.observation.tree_markdown)[:24000])
+                    try:
+                        if args.provider == "standard-llm":
+                            decision = await asyncio.to_thread(choose_standard, transport, model_request, plan.candidates)
+                        else:
+                            model = OpenAIDecisionModel(transport) if args.provider == "openai-decisions" else MicrosoftDecisionModel(transport)
+                            decision = await asyncio.to_thread(choose, model, model_request)
+                        inference = decision.inference.to_wire() if decision.inference else None
+                        if decision.kind == "error":
+                            raise ValueError("decision_error")
+                        validate_dispatch(decision, model_request, plan.candidates, sources.ax.observation,
+                            pid=args.pid, window_id=window_id, observed_at=observed["observed_at"],
+                            max_age_ms=args.max_observation_age_ms, min_probability=args.min_probability,
+                            min_margin=args.min_margin, require_probabilities=args.provider != "standard-llm")
+                        choice, confidence, probabilities = decision.selected_id, decision.confidence, dict(decision.probabilities)
+                    except (ProviderError, ValueError) as error:
+                        rejection_reason = str(error)
+                        if isinstance(error, ProviderError):
+                            inference = error.inference.to_wire()
+                        elif inference is not None and inference.get("error_code") is None:
+                            inference["error_code"] = rejection_reason
+                        scores = sorted(decision.probabilities.values(), reverse=True) if decision else []
+                        write_event(log_path, {"event": "outcome", "outcome": "unknown", "phase": "decide",
+                            "step": step, "inference": inference, "reason": rejection_reason,
+                            "selected_id": decision.selected_id if decision else None,
+                            "selected_probability": decision.probabilities.get(decision.selected_id) if decision else None,
+                            "selection_margin": scores[0] - scores[1] if len(scores) >= 2 else None,
+                            "observation": observed, "visual": visual_record,
+                            "decide_ms": round((time.perf_counter()-decide_started)*1000, 2)})
+                        return "unknown"
+                elif args.provider == "mock":
                     choice, confidence, probabilities = choose_mock_for_task(
                         task, sources, plan.candidates, history
                     )
@@ -307,7 +365,9 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                                                "phase": "decide", "step": step,
                                                "candidate_count": len(plan.candidates),
                                                "expected_ids": task.expected_next(history),
-                                               "error": "S1ServiceError", "reason": str(error)[:128]})
+                                               "error": "S1ServiceError", "reason": str(error)[:128],
+                                               "observation": observed, "visual": visual_record,
+                                               "decide_ms": round((time.perf_counter()-decide_started)*1000, 2)})
                         return "unknown"
                 else:
                     choice, confidence, probabilities = await asyncio.to_thread(choose_live, request)
@@ -327,6 +387,7 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                     "confidence": confidence,
                     "probabilities": probabilities,
                     "decide_ms": decide_ms,
+                    "inference": inference,
                     "expected_ids": expected_ids,
                     "expected_offered": bool(set(expected_ids) & offered),
                 }
@@ -349,11 +410,17 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                     write_event(log_path, {**base_event, "event": "outcome", "outcome": "abstained"})
                     return "abstained"
 
+                attempt_id = f"{label}:{step}"
+                base_event["attempt_id"] = attempt_id
+                write_event(log_path, {**base_event, "event": "action_attempt", "attempt_id": attempt_id,
+                    "step": step, "tool": candidate.tool, "candidate": candidate.id,
+                    "expected_ids": expected_ids,
+                    "requested_delivery_mode": candidate.arguments.get("delivery_mode")})
                 act_started = time.perf_counter()
                 try:
                     assert candidate.tool is not None
-                    await driver.call(candidate.tool, dict(candidate.arguments))
-                except Exception as error:
+                    action_result = await driver.call(candidate.tool, dict(candidate.arguments))
+                except (Exception, asyncio.CancelledError) as error:
                     act_ms = round((time.perf_counter() - act_started) * 1000, 2)
                     if is_stale_token_error(error):
                         # Nothing else is dispatched; the next step observes again.
@@ -372,16 +439,34 @@ async def run_task(args: argparse.Namespace, task: NativeTask) -> str:
                         continue
                     write_event(log_path, {**base_event, "event": "outcome", "outcome": "unknown",
                                            "phase": "action", "error": type(error).__name__,
-                                           "tool": candidate.tool})
+                                           "tool": candidate.tool, "act_ms": act_ms,
+                                           "delivery_status": "unresolved",
+                                           "cancelled": isinstance(error, asyncio.CancelledError)})
+                    if isinstance(error, asyncio.CancelledError):
+                        raise
                     return "unknown"
                 act_ms = round((time.perf_counter() - act_started) * 1000, 2)
-                history.append(
-                    task.history_entry(step, candidate.id, outcome=plan.outcomes.get(candidate.id))
-                )
+                effect = action_result.get("effect")
+                delivery = action_result.get("delivery")
+                delivery_mode = delivery.get("mode") if isinstance(delivery, dict) else None
+                confirmed = effect == "confirmed" and delivery_mode != "unknown"
+
                 write_event(log_path, {**base_event, "tool": candidate.tool, "act_ms": act_ms,
-                                       "delivery_mode": candidate.arguments.get("delivery_mode")})
+                                       "requested_delivery_mode": candidate.arguments.get("delivery_mode"),
+                                       "delivery_mode": delivery_mode, "delivery": delivery, "effect": effect,
+                                       "delivery_status": "confirmed" if confirmed else "uncertain"})
+                oracle_started = time.perf_counter()
                 outcome = await poll_oracle(task, step)
-                if outcome in {"verified", "refuted"}:
+                oracle_ms = round((time.perf_counter()-oracle_started)*1000, 2)
+                write_event(log_path, {"event": "oracle", "step": step, "oracle_ms": oracle_ms, "outcome": outcome})
+                reconciled = (delivery_mode != "unknown" and effect == "unverifiable"
+                              and task.action_progress(before, task.read_oracle(), candidate.id))
+                if confirmed or reconciled:
+                    history.append(task.history_entry(step, candidate.id, outcome=plan.outcomes.get(candidate.id)))
+                if reconciled:
+                    write_event(log_path, {"event": "action_reconciled", "attempt_id": attempt_id,
+                        "step": step, "evidence": "independent_oracle"})
+                if outcome in {"verified", "refuted"} or not (confirmed or reconciled):
                     write_event(log_path, {"event": "outcome", "outcome": outcome, "step": step})
                     return outcome
 
@@ -394,7 +479,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", choices=NATIVE_TASK_IDS, required=True)
     parser.add_argument(
-        "--provider", choices=("mock", "live", "s1"), default="mock",
+        "--provider", choices=("mock", "live", "s1", *NEW_PROVIDERS), default="mock",
         help="s1 reads the loopback decide URL from CUA_S1_DECISION_URL",
     )
     parser.add_argument("--pid", type=int, required=True, help="the running harness process")
@@ -403,14 +488,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--allow-foreground", action="store_true")
     parser.add_argument("--platform", choices=("macos", "windows", "linux"))
     parser.add_argument("--log", help="optional JSONL output path")
-    return parser.parse_args(argv)
+    parser.add_argument("--driver-socket", help="connect only to this Driver daemon socket")
+    parser.add_argument("--openai-model", default="gpt-6-luna")
+    parser.add_argument("--benchmark-input", action="store_true")
+    parser.add_argument("--min-probability", type=float, default=0.6)
+    parser.add_argument("--min-margin", type=float, default=0.1)
+    parser.add_argument("--max-observation-age-ms", type=int, default=30000)
+    args = parser.parse_args(argv)
+    if any(not math.isfinite(value) or not 0 <= value <= 1 for value in (args.min_probability, args.min_margin)):
+        parser.error("probability thresholds must be finite numbers in [0, 1]")
+    if args.max_observation_age_ms <= 0:
+        parser.error("observation age must be positive")
+    return args
 
 
 def task_from_args(args: argparse.Namespace) -> NativeTask:
     options: dict[str, Any] = {"pid": args.pid, "allow_foreground": args.allow_foreground}
     if args.note_text:
         options["note_text"] = args.note_text
-    return native_task(args.task, Path(args.state_file), **options)
+    task = native_task(args.task, Path(args.state_file), **options)
+    if getattr(args, "benchmark_input", False):
+        parameters = tuple(replace(parameter, secret=False) for parameter in task.parameters)
+        goal = task.goal
+        if parameters:
+            goal += " The deliberately public synthetic note text is " + json.dumps(parameters[0].value) + "."
+        task = replace(task, parameters=parameters, goal=goal, cap_order="depth_first")
+    return task
 
 
 def main() -> None:
@@ -419,7 +522,7 @@ def main() -> None:
         s1_service_url()  # fail before touching the app when the service is not configured
     try:
         outcome = asyncio.run(run_task(args, task_from_args(args)))
-    except (OracleError, NativeObservationError) as error:
+    except (OracleError, NativeObservationError, ValueError) as error:
         write_event(Path(args.log) if args.log else None,
                     {"event": "outcome", "outcome": "unknown", "error": type(error).__name__})
         raise SystemExit(1) from None

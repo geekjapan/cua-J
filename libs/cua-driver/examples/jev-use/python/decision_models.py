@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, Mapping, Protocol
@@ -18,6 +18,24 @@ from choose_action import REQUEST_SCHEMA, REQUEST_SCHEMA_V2, provider_observatio
 from jev_adapter import choose_bounded_with_typesafe
 
 DecisionKind = Literal["selected", "reobserve", "abstain", "error"]
+
+
+@dataclass(frozen=True)
+class InferenceEvidence:
+    requested_model: str
+    returned_model: str | None = None
+    elapsed_ms: float = 0.0
+    request_count: int = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cached_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    error_code: str | None = None
+    request_id: str | None = None
+
+    def to_wire(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -33,6 +51,8 @@ class DecisionRequest:
     snapshot_id: str | None = None
     elements: tuple[Mapping[str, str], ...] = ()
     progress: tuple[Mapping[str, Any], ...] = ()
+
+    observation_text: str | None = None
 
     @classmethod
     def from_validated(cls, request: Mapping[str, Any]) -> "DecisionRequest":
@@ -65,7 +85,10 @@ class DecisionRequest:
             validated["snapshot_id"] = self.snapshot_id
             validated["elements"] = [dict(item) for item in self.elements]
             validated["progress"] = [dict(item) for item in self.progress]
-        return provider_observation(validated)
+        observation = provider_observation(validated)
+        if self.observation_text:
+            observation["visible_text"] = self.observation_text
+        return observation
 
 
 @dataclass(frozen=True)
@@ -74,6 +97,7 @@ class ModelScores:
     model: str
     selected_id: str | None = None
     confidence: float | None = None
+    inference: InferenceEvidence | None = None
 
 
 @dataclass(frozen=True)
@@ -85,9 +109,10 @@ class DecisionResult:
     confidence: float | None
     probabilities: Mapping[str, float]
     reason: str | None = None
+    inference: InferenceEvidence | None = None
 
     def to_wire(self) -> dict[str, Any]:
-        return {
+        result = {
             "schema": "cua.decision_choice_v1",
             "kind": self.kind,
             "capture_id": self.capture_id,
@@ -97,6 +122,9 @@ class DecisionResult:
             "probabilities": dict(self.probabilities),
             "reason": self.reason,
         }
+        if self.inference is not None:
+            result["inference"] = self.inference.to_wire()
+        return result
 
 
 class DecisionModel(Protocol):
@@ -107,6 +135,7 @@ class DecisionModel(Protocol):
 
 def choose(model: DecisionModel, request: DecisionRequest) -> DecisionResult:
     """Reject malformed scores without converting them into an action."""
+    scores = None
     try:
         allowed = request.criteria
         scores = model.score(request)
@@ -154,13 +183,17 @@ def choose(model: DecisionModel, request: DecisionRequest) -> DecisionResult:
             model=scores.model,
             confidence=confidence,
             probabilities=probabilities,
+            inference=scores.inference,
         )
     except Exception as error:
         reason = "option_limit" if isinstance(error, OptionLimitError) else "model_error"
         model_name = getattr(model, "name", "unknown")
         if not isinstance(model_name, str) or not 0 < len(model_name) <= 128:
             model_name = "unknown"
-        return DecisionResult("error", request.capture_id, None, model_name, None, {}, reason)
+        evidence = getattr(error, "inference", None) or (scores.inference if scores else None)
+        if evidence is not None and evidence.error_code is None:
+            evidence = replace(evidence, error_code="invalid_decision")
+        return DecisionResult("error", request.capture_id, None, model_name, None, {}, reason, evidence)
 
 
 class OptionLimitError(ValueError):
