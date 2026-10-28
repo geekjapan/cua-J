@@ -4,27 +4,29 @@ A history-independent import of the Cua Driver CLI and libraries from [trycua/cu
 
 Driver sources, Rust SDK, Python and TypeScript bindings, contract definitions, platform adapters, fixtures and embedded assets are retained. Spaces, VM management, model training and benchmark products are excluded. The only local crate dependency outside Driver is `cua-telemetry`; its two build-time catalogs are vendored using its upstream fallback mechanism.
 
-## Install the agent skill
+## 導入するものと順序
 
-With Node.js 22.20 or later, run this command from the project where you want to use Cua Driver:
+実際に画面を操作するのはDriver本体です。スキルは、AIエージェントにDriverの使い方を伝える手順書です。Decision APIのPython実行例を使う場合は、Pythonの依存モジュールも導入します。
 
-```sh
-npx skills add geekjapan/cua-J --skill cua-j
-```
+| 導入対象 | 用途・導入されるもの | コマンドを実行する場所 | 必要な場面 |
+| --- | --- | --- | --- |
+| Driver本体とRust SDK | 画面操作を実行する`cua-driver`とRustライブラリ | `cua-J`のソース取得先 | 実際の画面操作・MCP接続 |
+| Pythonの依存モジュール | Python実行例用の`httpx`、`mcp`、`typesafe-sdk`など | `cua-J`のソース取得先 | Decision APIの実行例・比較測定 |
+| `cua-j`スキル | エージェント用の`SKILL.md`とライセンス | Driverを使いたい利用先プロジェクト | エージェントに操作手順を追加する場合 |
 
-Choose your coding agent when prompted. For a non-interactive Codex installation:
+エージェントから使う場合は、次の順に進めてください。
 
-```sh
-npx skills add geekjapan/cua-J --skill cua-j --agent codex --yes
-```
+1. [Driver本体とRust SDKを導入](#install-on-macos)します。
+2. 利用先プロジェクトで[スキルを導入](#install-the-agent-skill)します。
+3. [MCPを設定](#connect-an-mcp-client)し、エージェントをDriverへ接続します。
 
-The command installs the [cua-j agent skill](skills/cua-j/SKILL.md) into the current project. Add `--global` for a user-wide installation. See the [skills CLI reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md) for supported agents and options.
+Decision APIのPython実行例も使う場合は、続けて[Python依存モジュールの導入とAPI認証](#run-decisions-through-driver)を行います。Driver本体を導入済みなら、手順1を省略できます。開発用の[検証とCI](#verify-on-macos)は後半に記載しています。
 
-The skill guides setup and operation through Driver's bundled guides. Install the Driver executable with the source-build steps below and connect it to your agent through MCP.
+<a id="install-on-macos"></a>
 
-## Install on macOS
+## 1. Driver本体とRust SDKを導入する（macOS）
 
-Install Git, Xcode command line tools and `rustup` first. These commands build this fork from source. Run the remaining commands from the repository root.
+Git、Xcode command line tools、`rustup`を準備してください。以下は、このforkのソースを取得してビルドする手順です。`cd cua-J`以降は、ソース取得先のルートで実行します。
 
 ```sh
 git clone https://github.com/geekjapan/cua-J.git
@@ -37,11 +39,38 @@ cua-driver --version
 cua-driver list-tools
 ```
 
-The expected version is `0.38.0`. The exports apply to the current shell. To keep them across terminals, add the absolute checkout paths to your shell configuration. If you set `CARGO_TARGET_DIR`, use that output directory instead.
+`cua-driver --version`が`0.38.0`を表示し、`list-tools`でツール一覧を取得できれば、CLIの導入確認は完了です。エージェントから画面を操作する場合は、後述のMCP接続とmacOS権限も設定してください。
 
-### Connect an MCP client
+ビルド成果物は`libs/cua-driver/rust/target/release/`に生成されます。`CUA_DRIVER_BIN`はPython実行例が使うCLIを指定し、`PATH`はシェルから`cua-driver`を呼び出せるようにします。これらの`export`は現在のシェルで有効です。別のターミナルでも使う場合は、ソース取得先の絶対パスをシェル設定へ追加してください。`CARGO_TARGET_DIR`を設定している場合は、その出力先に読み替えます。
 
-Use the absolute path printed by `command -v cua-driver`. For clients with an `mcpServers` configuration, add this entry and replace the example path:
+<a id="install-the-agent-skill"></a>
+
+## 2. エージェント用スキルを導入する
+
+Node.js 22.20以降を準備し、**Driverを使いたいプロジェクト**へ移動して実行します。以下の`/path/to/your-project`は、利用先のパスに置き換えてください。
+
+```sh
+cd /path/to/your-project
+npx skills add geekjapan/cua-J --skill cua-j
+```
+
+対話画面で導入先のエージェントを選択します。Codexを指定して対話を省略する場合は、同じ利用先プロジェクトで次を実行します。
+
+```sh
+npx skills add geekjapan/cua-J --skill cua-j --agent codex --yes
+```
+
+このコマンドは、[cua-jスキル](skills/cua-j/SKILL.md)の手順書とライセンスを利用先プロジェクトへ配置します。**Driver本体、Pythonの依存モジュール、APIキーの設定はそれぞれの手順で用意します。** 全プロジェクトで使うユーザー単位の導入には`--global`を追加します。対応エージェントとオプションは[skills CLIの公式リファレンス](https://github.com/vercel-labs/skills/blob/main/docs/commands.md)を参照してください。
+
+Codexを指定した導入先は`<利用先プロジェクト>/.agents/skills/cua-j/`です。スキルはDriver内蔵のガイドを読み、接続と操作を案内します。
+
+<a id="connect-an-mcp-client"></a>
+
+## 3. エージェントをDriverへ接続する（MCP）
+
+スキルを導入したエージェントに、DriverのMCPサーバーも登録します。`command -v cua-driver`でCLIの絶対パスを確認してください。
+
+次は`mcpServers`形式を使うクライアントの設定例です。`command`を、手順1でビルドした実行ファイルの絶対パスに置き換えて追加します。クライアントごとのMCP設定方法に従ってください。
 
 ```json
 {
@@ -54,9 +83,72 @@ Use the absolute path printed by `command -v cua-driver`. For clients with an `m
 }
 ```
 
-On macOS, `--direct` runs this fork's runtime in the MCP process and uses the launching host's Accessibility and Screen Recording grants. For native control and screenshots, grant those permissions to the terminal or agent host in **System Settings > Privacy & Security**. Bare `cua-driver mcp` instead proxies to the installed `CuaDriver.app`. See [macOS process identity and permissions](libs/cua-driver/README.md#macos-process-identity-and-permissions) for supported app and embedding modes.
+設定を反映してクライアントを再接続し、`get_guide`などのDriverツールが表示されることを確認してください。
 
-## Verify on macOS
+macOSでは`--direct`により、このforkのランタイムをMCPプロセス内で起動します。AccessibilityとScreen Recordingは、起動元のターミナルやエージェントホストの権限を使います。画面操作やスクリーンショットを使う場合は、**システム設定 > プライバシーとセキュリティ**で、その起動元に権限を付与してください。引数を`mcp`だけにすると、インストール済み`CuaDriver.app`へのプロキシ接続になります。詳細は[macOSのプロセス識別と権限](libs/cua-driver/README.md#macos-process-identity-and-permissions)を参照してください。
+
+<a id="run-decisions-through-driver"></a>
+
+## Decision APIのPython実行例を使う（任意）
+
+Python実行例ではOpenAI Decisions、Microsoft Decision-1、通常のOpenAI Responsesによるfunction callを扱います。以下は、実行例の依存モジュールとAPI認証を準備する手順です。
+
+<a id="set-up-the-python-example"></a>
+
+### Pythonの依存モジュールを導入する
+
+Python 3.10以降と`uv`を準備してください。検証にはPython 3.13.13とuv 0.11.6を使用しました。**`cua-J`のソース取得先のルートへ移動して**、依存関係を同期します。
+
+```sh
+uv sync --frozen --project libs/cua-driver/examples/jev-use
+uv run --frozen --project libs/cua-driver/examples/jev-use \
+	python libs/cua-driver/examples/jev-use/verify_decision_cli.py --model mock
+```
+
+`uv sync`は、Python実行例用の仮想環境と依存ライブラリを用意します。`from cua_driver import CuaDriver`用のPython SDKの導入とは別の手順です。この実行例はDriverへMCPで接続するため、Python SDKを必要としません。
+
+mock確認で`"kind": "selected"`と`"selected_id": "submit-form"`が表示されれば、依存環境の確認は完了です。この確認にAPIキーや画面操作は不要です。
+
+### API認証を設定する
+
+保存先は**`cua-J`のソース取得先のルートにある`.env.local`**です。Git管理の対象外で、利用するプロバイダーの認証情報を記入します。以下のコマンドは、既存ファイルの内容を保持したまま権限を設定します。
+
+```sh
+touch .env.local
+chmod 600 .env.local
+```
+
+| プロバイダー | `.env.local`に設定する変数 |
+| --- | --- |
+| OpenAI Decisions or Responses | `OPENAI_API_KEY` |
+| Microsoft Decision-1 | HTTPSリソースルートの`AZURE_ENDPOINT`、`AZURE_DEPLOYMENT_NAME`（既定は`decision-1`）、`AZURE_API_KEY`または`AZURE_ENTRA_TOKEN` |
+
+各値を`NAME=value`形式で1行ずつ記入してください。Entraトークンは実行時点で有効なものを使います。
+
+OpenAI Decisionsへ合成リクエストを1回送る例です。**設定したアカウントの有料APIを呼び出します。** このコマンド自体は画面を操作しません。ソース取得先のルートで実行してください。
+
+```sh
+uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
+	python libs/cua-driver/examples/jev-use/python/choose_decision.py \
+	--model openai-decisions \
+	< libs/cua-driver/examples/jev-use/fixtures/jev-choice-request-v1.json
+```
+
+Microsoftの場合は、対応する認証変数を設定して`--model microsoft-decision1`に変更します。成功時は`cua.decision_choice_v1`を返し、判断結果は`selected`、`reobserve`、`abstain`のいずれかです。APIや応答検証の失敗は`error`、設定不備は非ゼロ終了で報告します。
+
+### 実際の操作と比較結果
+
+選択結果は元の観測と許可済みの引数に結び付けて検証します。モデルの確信度は操作権限を与えず、Driverのトークンやcapture IDも推論中にUIが変わらなかったことを保証しません。
+
+See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and existing browser runners retain their upstream provider support.
+
+The [45-trial native comparison](libs/cua-driver/examples/jev-use/benchmarks/2026-10-28-native.md) records measured completion rates, inference and task times, failures and limits. Sanitized trial data and source hashes accompany the report.
+
+The [45-trial public website comparison](docs/benchmarks/2026-10-28-websites.md) records completion, action outcomes and timing on Wikipedia, Python documentation and Hacker News. See [the website setup](libs/cua-driver/examples/jev-use/decision-models.md#compare-actual-public-websites) to repeat it with isolated Chrome profiles and independent completion checks.
+
+<a id="verify-on-macos"></a>
+
+## 開発者向け検証（macOS）
 
 These checks use a debug build and require Python 3 and Z3 5.1.0. Run from the repository root.
 
@@ -77,51 +169,6 @@ Project-local instructions and feature maps are in [.cursor/skills/verify-cua-dr
 [GitHub Actions](.github/workflows/ci.yml) runs on pushes to `main`, pull requests and manual dispatch. An Ubuntu job runs the locked Python decision and controller tests without credentials or desktop input. A macOS 26 job builds the CLI and Rust SDK, runs core, contract and SDK tests, runs CLI tests serially, then runs the bounded formal check with mutation detection. CI logs are retained for seven days.
 
 The hosted job does not run `scripts/verify-runtime.py`. Native display verification remains a separate local check using the commands above. CI does not certify desktop interaction or other platforms.
-
-## Run decisions through Driver
-
-The Python native runner supports OpenAI Decisions, Microsoft Decision-1 and ordinary OpenAI Responses function calls. It binds each selection to the original observation and authorized action arguments. Model confidence does not grant permission. Driver tokens and capture IDs do not prove that an external UI stayed unchanged during inference.
-
-### Set up the Python example
-
-Install Python 3.10 or later and `uv`. Python 3.13.13 and uv 0.11.6 were used for verification. From the repository root, install the locked dependencies and check a synthetic choice without credentials or desktop actions:
-
-```sh
-uv sync --frozen --project libs/cua-driver/examples/jev-use
-uv run --frozen --project libs/cua-driver/examples/jev-use \
-	python libs/cua-driver/examples/jev-use/verify_decision_cli.py --model mock
-```
-
-The check prints `"kind": "selected"` and `"selected_id": "submit-form"` on success.
-
-Create or edit the ignored root `.env.local` file with credentials for the provider you use. These commands preserve an existing file:
-
-```sh
-touch .env.local
-chmod 600 .env.local
-```
-
-| Provider | Variables in `.env.local` |
-| --- | --- |
-| OpenAI Decisions or Responses | `OPENAI_API_KEY` |
-| Microsoft Decision-1 | `AZURE_ENDPOINT` with the HTTPS resource root, `AZURE_DEPLOYMENT_NAME` (default `decision-1`), and either `AZURE_API_KEY` or `AZURE_ENTRA_TOKEN` |
-
-Store each value as `NAME=value` on its own line. An Entra token must still be valid when the command runs. To send one synthetic request to OpenAI Decisions, run the following command. It uses the configured account's paid API and performs no desktop action:
-
-```sh
-uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
-	python libs/cua-driver/examples/jev-use/python/choose_decision.py \
-	--model openai-decisions \
-	< libs/cua-driver/examples/jev-use/fixtures/jev-choice-request-v1.json
-```
-
-For Microsoft, use `--model microsoft-decision1` with its variables configured. A successful request returns `cua.decision_choice_v1`; the decision can be `selected`, `reobserve` or `abstain`. An API or response-validation failure returns `error` or a nonzero setup failure.
-
-See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and existing browser runners retain their upstream provider support.
-
-The [45-trial native comparison](libs/cua-driver/examples/jev-use/benchmarks/2026-10-28-native.md) records measured completion rates, inference and task times, failures and limits. Sanitized trial data and source hashes accompany the report.
-
-The [45-trial public website comparison](docs/benchmarks/2026-10-28-websites.md) records completion, action outcomes and timing on Wikipedia, Python documentation and Hacker News. See [the website setup](libs/cua-driver/examples/jev-use/decision-models.md#compare-actual-public-websites) to repeat it with isolated Chrome profiles and independent completion checks.
 
 ## Import and licenses
 
