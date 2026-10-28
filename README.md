@@ -4,9 +4,43 @@ A history-independent import of the Cua Driver CLI and libraries from [trycua/cu
 
 Driver sources, Rust SDK, Python and TypeScript bindings, contract definitions, platform adapters, fixtures and embedded assets are retained. Spaces, VM management, model training and benchmark products are excluded. The only local crate dependency outside Driver is `cua-telemetry`; its two build-time catalogs are vendored using its upstream fallback mechanism.
 
-## Build and verify on macOS
+## Install on macOS
 
-Requires Rust 1.95.0, Xcode command line tools, Python 3 and Z3 5.1.0. Run from the repository root.
+Install Git, Xcode command line tools and `rustup` first. These commands build this fork from source. Run the remaining commands from the repository root.
+
+```sh
+git clone https://github.com/geekjapan/cua-J.git
+cd cua-J
+rustup toolchain install 1.95.0 --profile minimal
+cargo +1.95.0 build --release --locked --manifest-path libs/cua-driver/rust/Cargo.toml -p cua-driver -p cua-driver-sdk
+export CUA_DRIVER_BIN="$PWD/libs/cua-driver/rust/target/release/cua-driver"
+export PATH="$PWD/libs/cua-driver/rust/target/release:$PATH"
+cua-driver --version
+cua-driver list-tools
+```
+
+The expected version is `0.38.0`. The exports apply to the current shell. To keep them across terminals, add the absolute checkout paths to your shell configuration. If you set `CARGO_TARGET_DIR`, use that output directory instead.
+
+### Connect an MCP client
+
+Use the absolute path printed by `command -v cua-driver`. For clients with an `mcpServers` configuration, add this entry and replace the example path:
+
+```json
+{
+  "mcpServers": {
+    "cua-driver": {
+      "command": "/absolute/path/to/cua-J/libs/cua-driver/rust/target/release/cua-driver",
+      "args": ["mcp", "--direct"]
+    }
+  }
+}
+```
+
+On macOS, `--direct` runs this fork's runtime in the MCP process and uses the launching host's Accessibility and Screen Recording grants. For native control and screenshots, grant those permissions to the terminal or agent host in **System Settings > Privacy & Security**. Bare `cua-driver mcp` instead proxies to the installed `CuaDriver.app`. See [macOS process identity and permissions](libs/cua-driver/README.md#macos-process-identity-and-permissions) for supported app and embedding modes.
+
+## Verify on macOS
+
+These checks use a debug build and require Python 3 and Z3 5.1.0. Run from the repository root.
 
 ```sh
 cargo +1.95.0 build --locked --manifest-path libs/cua-driver/rust/Cargo.toml -p cua-driver -p cua-driver-sdk
@@ -29,6 +63,41 @@ The hosted job does not run `scripts/verify-runtime.py`. Native display verifica
 ## Run decisions through Driver
 
 The Python native runner supports OpenAI Decisions, Microsoft Decision-1 and ordinary OpenAI Responses function calls. It binds each selection to the original observation and authorized action arguments. Model confidence does not grant permission. Driver tokens and capture IDs do not prove that an external UI stayed unchanged during inference.
+
+### Set up the Python example
+
+Install Python 3.10 or later and `uv`. Python 3.13.13 and uv 0.11.6 were used for verification. From the repository root, install the locked dependencies and check a synthetic choice without credentials or desktop actions:
+
+```sh
+uv sync --frozen --project libs/cua-driver/examples/jev-use
+uv run --frozen --project libs/cua-driver/examples/jev-use \
+	python libs/cua-driver/examples/jev-use/verify_decision_cli.py --model mock
+```
+
+The check prints `"kind": "selected"` and `"selected_id": "submit-form"` on success.
+
+Create or edit the ignored root `.env.local` file with credentials for the provider you use. These commands preserve an existing file:
+
+```sh
+touch .env.local
+chmod 600 .env.local
+```
+
+| Provider | Variables in `.env.local` |
+| --- | --- |
+| OpenAI Decisions or Responses | `OPENAI_API_KEY` |
+| Microsoft Decision-1 | `AZURE_ENDPOINT` with the HTTPS resource root, `AZURE_DEPLOYMENT_NAME` (default `decision-1`), and either `AZURE_API_KEY` or `AZURE_ENTRA_TOKEN` |
+
+Store each value as `NAME=value` on its own line. An Entra token must still be valid when the command runs. To send one synthetic request to OpenAI Decisions, run the following command. It uses the configured account's paid API and performs no desktop action:
+
+```sh
+uv run --frozen --project libs/cua-driver/examples/jev-use --env-file .env.local \
+	python libs/cua-driver/examples/jev-use/python/choose_decision.py \
+	--model openai-decisions \
+	< libs/cua-driver/examples/jev-use/fixtures/jev-choice-request-v1.json
+```
+
+For Microsoft, use `--model microsoft-decision1` with its variables configured. A successful request returns `cua.decision_choice_v1`; the decision can be `selected`, `reobserve` or `abstain`. An API or response-validation failure returns `error` or a nonzero setup failure.
 
 See [the decision providers and native comparison](libs/cua-driver/examples/jev-use/decision-models.md#remote-decision-providers) for configuration and verification commands. The comparison uses isolated AppKit tasks with an independent state oracle. It does not measure general desktop planning or unrestricted text generation. The TypeScript and existing browser runners retain their upstream provider support.
 
